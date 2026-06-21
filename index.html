@@ -612,8 +612,8 @@
         // Cache management
         const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
         const CACHE_KEYS = {
-            PLAYLIST: 'iptv_playlist_cache',
-            PLAYLIST_TIMESTAMP: 'iptv_playlist_timestamp',
+            PLAYLIST: 'iptv_playlist_cache_v2',
+            PLAYLIST_TIMESTAMP: 'iptv_playlist_timestamp_v2',
             EPG: 'iptv_epg_cache',
             EPG_TIMESTAMP: 'iptv_epg_timestamp'
         };
@@ -780,79 +780,51 @@
                     const tvgId = extractAttribute(line, 'tvg-id');
                     const groupTitle = extractAttribute(line, 'group-title');
                     
-                    // Extract country from tvg-id (e.g., "24Kitchen.us@Serbia" -> "Serbia" or "48Hours.us@CA" -> "Canada")
+                    // Extract country from tvg-id (e.g., "24Kitchen.us@Serbia" -> "Serbia" or "ABN.au@HD" -> "Australia")
+                    // Format varies: SomeName.CC@CountryOrQuality where CC is usually "us" (global prefix)
+                    // Actual country is either:
+                    // 1. In the @XXX part (preferred): @Italy, @Serbia, @US, @CA, @HD (quality)
+                    // 2. In the .XX part (for older format): .au, .uk, .fr
                     let country = 'Unknown';
                     if (tvgId) {
-                        // Try to extract from @XXX pattern first (e.g., @CA, @GB, @IT, @Serbia)
-                        const atMatch = tvgId.match(/@([A-Za-z]+)$/);
+                        let foundCountry = null;
+                        
+                        // Try @-code first (more reliable for modern format)
+                        const atMatch = tvgId.match(/@([A-Za-z0-9]+)$/);
                         if (atMatch) {
-                            const code = atMatch[1];
-                            const codeUpper = code.toUpperCase();
+                            const code = atMatch[1].toUpperCase();
                             
-                            // Map of @-codes to countries (handles both ISO codes and special values)
-                            const atCodeMap = {
-                                // ISO 2-letter country codes
-                                'US': 'United States', 'USA': 'United States', 'CA': 'Canada',
-                                'GB': 'United Kingdom', 'UK': 'United Kingdom', 'IT': 'Italy',
-                                'FR': 'France', 'DE': 'Germany', 'ES': 'Spain', 'PT': 'Portugal',
-                                'NL': 'Netherlands', 'BE': 'Belgium', 'CH': 'Switzerland', 'AT': 'Austria',
-                                'PL': 'Poland', 'RO': 'Romania', 'HU': 'Hungary', 'CZ': 'Czech Republic',
-                                'SE': 'Sweden', 'NO': 'Norway', 'DK': 'Denmark', 'FI': 'Finland',
-                                'IS': 'Iceland', 'GR': 'Greece', 'RS': 'Serbia', 'HR': 'Croatia',
-                                'BA': 'Bosnia and Herzegovina', 'ME': 'Montenegro', 'MK': 'North Macedonia',
-                                'BG': 'Bulgaria', 'SK': 'Slovakia', 'SI': 'Slovenia', 'LT': 'Lithuania',
-                                'LV': 'Latvia', 'EE': 'Estonia', 'UA': 'Ukraine', 'BY': 'Belarus',
-                                'RU': 'Russia', 'KZ': 'Kazakhstan', 'UZ': 'Uzbekistan', 'TJ': 'Tajikistan',
-                                'TM': 'Turkmenistan', 'KG': 'Kyrgyzstan', 'TR': 'Turkey', 'IR': 'Iran',
-                                'IQ': 'Iraq', 'SA': 'Saudi Arabia', 'AE': 'United Arab Emirates',
-                                'KW': 'Kuwait', 'QA': 'Qatar', 'OM': 'Oman', 'YE': 'Yemen',
-                                'IL': 'Israel', 'PS': 'Palestine', 'JO': 'Jordan', 'LB': 'Lebanon',
-                                'SY': 'Syria', 'EG': 'Egypt', 'DZ': 'Algeria', 'TN': 'Tunisia',
-                                'MA': 'Morocco', 'SD': 'Sudan', 'ET': 'Ethiopia', 'KE': 'Kenya',
-                                'TZ': 'Tanzania', 'UG': 'Uganda', 'ZA': 'South Africa', 'NG': 'Nigeria',
-                                'GH': 'Ghana', 'SN': 'Senegal', 'CI': 'Côte d\'Ivoire', 'CM': 'Cameroon',
-                                'CD': 'DR Congo', 'IN': 'India', 'PK': 'Pakistan', 'BD': 'Bangladesh',
-                                'LK': 'Sri Lanka', 'NP': 'Nepal', 'TH': 'Thailand', 'LA': 'Laos',
-                                'KH': 'Cambodia', 'VN': 'Vietnam', 'MM': 'Myanmar', 'SG': 'Singapore',
-                                'MY': 'Malaysia', 'ID': 'Indonesia', 'PH': 'Philippines', 'KR': 'South Korea',
-                                'JP': 'Japan', 'CN': 'China', 'TW': 'Taiwan', 'HK': 'Hong Kong',
-                                'MO': 'Macau', 'AU': 'Australia', 'NZ': 'New Zealand', 'FJ': 'Fiji',
-                                'MX': 'Mexico', 'BR': 'Brazil', 'AR': 'Argentina', 'CL': 'Chile',
-                                'CO': 'Colombia', 'PE': 'Peru', 'VE': 'Venezuela', 'EC': 'Ecuador',
-                                'BO': 'Bolivia', 'PY': 'Paraguay', 'UY': 'Uruguay', 'CR': 'Costa Rica',
-                                'PA': 'Panama', 'GT': 'Guatemala', 'SV': 'El Salvador', 'HN': 'Honduras',
-                                'NI': 'Nicaragua', 'CU': 'Cuba', 'DO': 'Dominican Republic', 'JM': 'Jamaica',
-                                'HT': 'Haiti',
-                                // Full country names
-                                'ITALY': 'Italy', 'SERBIA': 'Serbia', 'FRANCE': 'France', 'GERMANY': 'Germany',
-                                'SPAIN': 'Spain', 'PORTUGAL': 'Portugal', 'POLAND': 'Poland', 'ROMANIA': 'Romania',
-                                'HUNGARY': 'Hungary', 'CZECHREPUBLIC': 'Czech Republic', 'AUSTRALIA': 'Australia',
-                                'BRAZIL': 'Brazil', 'INDIA': 'India', 'PAKISTAN': 'Pakistan', 'NEPAL': 'Nepal',
-                                'INDONESIA': 'Indonesia', 'MOROCCO': 'Morocco',
-                                // Regional/language codes - these are NOT countries, so map to Unknown
-                                'AFRICA': 'Unknown', 'AMERICA': 'Unknown', 'EUROPE': 'Unknown',
-                                'ARABIA': 'Unknown', 'ARABIC': 'Unknown', 'ENGLISH': 'Unknown',
-                                'INTERNATIONAL': 'Unknown', 'PANREGIONAL': 'Unknown',
-                                'FAREAST': 'Unknown', 'INDOCHINA': 'Unknown', 'LATAM': 'Unknown',
-                                'EAST': 'Unknown', 'RUSSIAN': 'Unknown', 'CHINESE': 'Unknown',
-                                'SPANISH': 'Unknown', 'PORTUGUESE': 'Unknown', 'HEBREW': 'Unknown',
-                                // Australian states - these are regions within Australia
-                                'ACT': 'Unknown', 'NSW': 'Unknown', 'QLD': 'Unknown',
-                                'TAS': 'Unknown', 'VIC': 'Unknown', 'WA': 'Unknown',
-                                // Quality indicators - ignore
-                                'HD': 'Unknown', 'EASTHD': 'Unknown', 'INTERHD': 'Unknown',
-                                'HDTNT': 'Unknown', 'PLUS1': 'Unknown'
-                            };
-                            
-                            country = atCodeMap[codeUpper] || 'Unknown';
-                        } else {
-                            // Fallback to old extraction method for legacy tvg-id format
-                            const dotMatch = tvgId.match(/\.([a-z]{2})[.@]/i);
+                            // First check if it's a valid 2-letter country code
+                            if (code.length === 2 && COUNTRY_NAMES[code]) {
+                                foundCountry = COUNTRY_NAMES[code];
+                            } else if (code.length > 2) {
+                                // Try to match full country names
+                                const nameMap = {
+                                    'ITALY': 'Italy', 'SERBIA': 'Serbia', 'FRANCE': 'France',
+                                    'GERMANY': 'Germany', 'SPAIN': 'Spain', 'PORTUGAL': 'Portugal',
+                                    'POLAND': 'Poland', 'ROMANIA': 'Romania', 'HUNGARY': 'Hungary',
+                                    'AUSTRALIA': 'Australia', 'BRAZIL': 'Brazil', 'INDIA': 'India',
+                                    'PAKISTAN': 'Pakistan', 'NEPAL': 'Nepal', 'INDONESIA': 'Indonesia',
+                                    'MOROCCO': 'Morocco', 'CANADA': 'Canada'
+                                };
+                                foundCountry = nameMap[code] || null;
+                            }
+                            // If not found, code might be quality (HD, SD) or region - use as Unknown
+                        }
+                        
+                        // Fallback: try .XX pattern before @ for older tvg-id format (e.g., "2GB.au@SD")
+                        if (!foundCountry) {
+                            const dotMatch = tvgId.match(/\.([a-z]{2})[@.]/i);
                             if (dotMatch) {
                                 const countryCode = dotMatch[1].toUpperCase();
-                                country = COUNTRY_NAMES[countryCode] || 'Unknown';
+                                // Only accept if it's NOT "us" (global prefix) and it's a valid country code
+                                if (countryCode !== 'US' && COUNTRY_NAMES[countryCode]) {
+                                    foundCountry = COUNTRY_NAMES[countryCode];
+                                }
                             }
                         }
+                        
+                        country = foundCountry || 'Unknown';
                     }
                     
                     // Split group-title by semicolon for multiple categories
