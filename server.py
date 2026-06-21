@@ -27,6 +27,11 @@ import ssl
 import sys
 
 PORT = 8000
+# Bind to localhost only. This proxy intentionally fetches arbitrary stream
+# URLs, so exposing it on all interfaces would let anyone on your network use
+# it as an open proxy (an SSRF risk). Keeping it on 127.0.0.1 limits use to
+# this machine. Change to "0.0.0.0" only if you understand the consequences.
+HOST = "127.0.0.1"
 
 # Many IPTV servers have broken, expired, or mismatched HTTPS certificates.
 # A browser would refuse them, but for a local personal proxy we tolerate them
@@ -166,7 +171,7 @@ class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
 
 
 if __name__ == "__main__":
-    server = ThreadingHTTPServer(("", PORT), ProxyHTTPRequestHandler)
+    server = ThreadingHTTPServer((HOST, PORT), ProxyHTTPRequestHandler)
     print(f"\n  IPTV server running at: http://localhost:{PORT}/index.html")
     print(f"  Stream proxy active at: http://localhost:{PORT}/proxy?url=...")
     print("  Press Ctrl+C to stop.\n")
