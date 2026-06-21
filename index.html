@@ -1,0 +1,1356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPTV - Live TV Channels</title>
+    <!-- HLS.js for video streaming support -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            grid-template-rows: auto 1fr;
+            height: 100vh;
+            gap: 0;
+        }
+
+        .header {
+            grid-column: 1 / -1;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 1rem;
+            border-bottom: 2px solid #00d4ff;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            color: #00d4ff;
+            text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .cache-info {
+            font-size: 0.75rem;
+            color: #00d4ff;
+            opacity: 0.7;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .cache-badge {
+            background: rgba(0, 212, 255, 0.2);
+            padding: 0.2rem 0.5rem;
+            border-radius: 3px;
+            border: 1px solid rgba(0, 212, 255, 0.4);
+        }
+
+        .clear-cache-btn {
+            background: rgba(255, 100, 100, 0.2);
+            border: 1px solid #ff6464;
+            color: #ff9999;
+            padding: 0.3rem 0.6rem;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            transition: all 0.2s;
+        }
+
+        .clear-cache-btn:hover {
+            background: rgba(255, 100, 100, 0.3);
+        }
+
+        .search-box {
+            padding: 0.5rem 1rem;
+            border: 1px solid #00d4ff;
+            border-radius: 4px;
+            background: rgba(0, 212, 255, 0.1);
+            color: #fff;
+            min-width: 200px;
+            font-size: 0.9rem;
+        }
+
+        .search-box:focus {
+            outline: none;
+            background: rgba(0, 212, 255, 0.2);
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+        }
+
+        .sort-control {
+            padding: 0.5rem 1rem;
+            border: 1px solid #00d4ff;
+            border-radius: 4px;
+            background: rgba(0, 212, 255, 0.1);
+            color: #fff;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+
+        .sort-control:hover {
+            background: rgba(0, 212, 255, 0.2);
+        }
+
+        .sidebar {
+            background: rgba(0, 0, 0, 0.3);
+            border-right: 1px solid #00d4ff;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .filter-section {
+            padding: 0.8rem;
+            border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .filter-section h3 {
+            font-size: 0.85rem;
+            color: #00d4ff;
+            margin-bottom: 0.4rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            position: sticky;
+            top: 0;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 0.2rem 0;
+        }
+
+        .filter-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.3rem;
+        }
+
+        .filter-btn {
+            padding: 0.3rem 0.6rem;
+            border: 1px solid rgba(0, 212, 255, 0.5);
+            background: transparent;
+            color: #fff;
+            cursor: pointer;
+            font-size: 0.75rem;
+            border-radius: 2px;
+            transition: all 0.3s;
+            text-align: center;
+        }
+
+        .filter-btn:hover {
+            background: rgba(0, 212, 255, 0.2);
+            border-color: #00d4ff;
+        }
+
+        .filter-btn.active {
+            background: #00d4ff;
+            color: #1a1a2e;
+            border-color: #00d4ff;
+        }
+
+        .channels-section {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .channels-header {
+            padding: 0.8rem;
+            background: rgba(0, 212, 255, 0.2);
+            border-bottom: 2px solid #00d4ff;
+            font-weight: bold;
+            font-size: 0.9rem;
+            color: #00d4ff;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .channel-item {
+            padding: 0.8rem;
+            border-bottom: 1px solid rgba(0, 212, 255, 0.1);
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+        }
+
+        .channel-item:hover {
+            background: rgba(0, 212, 255, 0.15);
+            padding-left: 1.2rem;
+        }
+
+        .channel-item.active {
+            background: rgba(0, 212, 255, 0.3);
+            border-left: 3px solid #00d4ff;
+            padding-left: 0.5rem;
+        }
+
+        .channel-item-logo {
+            width: 24px;
+            height: 24px;
+            border-radius: 2px;
+            object-fit: contain;
+            flex-shrink: 0;
+        }
+
+        .channel-item-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+            min-width: 0;
+        }
+
+        .channel-item-name {
+            font-size: 0.95rem;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .channel-item-meta {
+            font-size: 0.75rem;
+            color: #00d4ff;
+            opacity: 0.8;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .main-area {
+            display: flex;
+            flex-direction: column;
+            background: #0f0f1e;
+        }
+
+        .video-player-wrapper {
+            flex: 0 0 70%;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            border-bottom: 2px solid #00d4ff;
+            position: relative;
+        }
+
+        video {
+            width: 100%;
+            flex: 1;
+            background: #000;
+        }
+
+        .video-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #00d4ff;
+            font-size: 1.2rem;
+            text-align: center;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .loading-spinner {
+            border: 3px solid rgba(0, 212, 255, 0.3);
+            border-top: 3px solid #00d4ff;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .player-controls {
+            background: rgba(0, 0, 0, 0.9);
+            padding: 0.8rem;
+            display: flex;
+            gap: 0.8rem;
+            align-items: center;
+            font-size: 0.85rem;
+            border-top: 1px solid rgba(0, 212, 255, 0.3);
+        }
+
+        .channel-nav-btn {
+            background: rgba(0, 212, 255, 0.3);
+            border: 1px solid #00d4ff;
+            color: #00d4ff;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            border-radius: 3px;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+            font-weight: bold;
+        }
+
+        .channel-nav-btn:hover {
+            background: rgba(0, 212, 255, 0.5);
+            transform: scale(1.05);
+        }
+
+        .control-btn {
+            background: rgba(0, 212, 255, 0.2);
+            border: 1px solid #00d4ff;
+            color: #00d4ff;
+            padding: 0.4rem 0.8rem;
+            cursor: pointer;
+            border-radius: 2px;
+            transition: all 0.2s;
+            font-size: 0.85rem;
+        }
+
+        .control-btn:hover {
+            background: rgba(0, 212, 255, 0.4);
+        }
+
+        .fullscreen-toggle {
+            margin-left: auto;
+        }
+
+        .info-panel {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            padding: 1rem;
+            overflow-y: auto;
+        }
+
+        .info-box {
+            background: rgba(0, 212, 255, 0.1);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            border-radius: 4px;
+            padding: 1rem;
+        }
+
+        .info-box h3 {
+            color: #00d4ff;
+            margin-bottom: 0.5rem;
+            font-size: 0.95rem;
+            text-transform: uppercase;
+        }
+
+        .info-box p {
+            font-size: 0.9rem;
+            line-height: 1.5;
+            color: #ccc;
+        }
+
+        .epg-item {
+            background: rgba(0, 212, 255, 0.05);
+            padding: 0.5rem;
+            margin: 0.3rem 0;
+            border-left: 2px solid #00d4ff;
+            border-radius: 2px;
+            font-size: 0.85rem;
+        }
+
+        .epg-time {
+            color: #00d4ff;
+            font-weight: bold;
+        }
+
+        .epg-program {
+            color: #ccc;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #00d4ff;
+            font-size: 1.2rem;
+        }
+
+        .error {
+            background: rgba(255, 100, 100, 0.2);
+            border: 1px solid #ff6464;
+            color: #ff9999;
+            padding: 1rem;
+            border-radius: 4px;
+            margin: 1rem;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 212, 255, 0.05);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0, 212, 255, 0.3);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 212, 255, 0.5);
+        }
+
+        .channel-count {
+            font-size: 0.85rem;
+            color: #00d4ff;
+            padding: 0.5rem 1rem;
+            border-top: 1px solid rgba(0, 212, 255, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📺 IPTV Live Channels</h1>
+            <div class="header-controls">
+                <input 
+                    type="text" 
+                    class="search-box" 
+                    id="searchBox" 
+                    placeholder="Search channels..."
+                >
+                <select class="sort-control" id="sortControl">
+                    <option value="name">Sort by Name</option>
+                    <option value="country">Sort by Country</option>
+                    <option value="type">Sort by Type</option>
+                </select>
+                <div class="cache-info" id="cacheInfo">
+                    <span class="cache-badge">💾 Cache</span>
+                    <span id="cacheStatus">Loading...</span>
+                </div>
+                <button class="clear-cache-btn" id="clearCacheBtn" onclick="handleClearCache()">🗑️ Clear Cache</button>
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <div class="filter-section">
+                <h3>📍 Countries</h3>
+                <div class="filter-buttons" id="countryFilters"></div>
+            </div>
+            <div class="filter-section">
+                <h3>🎬 Types</h3>
+                <div class="filter-buttons" id="typeFilters"></div>
+            </div>
+            <div class="channels-section">
+                <div class="channels-header">📺 Channels</div>
+                <div id="channelsList"></div>
+            </div>
+            <div class="channel-count" id="channelCount"></div>
+        </div>
+
+        <div class="main-area">
+            <div class="video-player-wrapper">
+                <div id="videoOverlay" class="video-overlay" style="display: none;"></div>
+                <video id="videoPlayer" controls crossorigin="anonymous" autoplay>
+                    <source src="" type="application/x-mpegURL">
+                    Your browser does not support the video tag.
+                </video>
+                <div class="player-controls">
+                    <button class="channel-nav-btn" id="prevChannelBtn">⬅ Previous</button>
+                    <button class="channel-nav-btn" id="nextChannelBtn">Next ➡</button>
+                    <button class="control-btn" id="playBtn">▶ Play</button>
+                    <button class="control-btn" id="pauseBtn">⏸ Pause</button>
+                    <span id="currentChannel" style="flex: 1; margin-left: 1rem; font-size: 0.95rem; font-weight: 500;"></span>
+                    <button class="control-btn" id="retryBtn">🔄 Retry</button>
+                    <button class="control-btn fullscreen-toggle" id="fullscreenBtn">⛶ Fullscreen</button>
+                </div>
+            </div>
+            <div class="info-panel">
+                <div class="info-box">
+                    <h3>Channel Info</h3>
+                    <p id="channelInfo">Select a channel to view details</p>
+                </div>
+                <div class="info-box">
+                    <h3>Now Playing</h3>
+                    <div id="epgInfo">No EPG data available</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration - Load from local file to avoid CORS issues
+        const M3U_URL = 'playlist.m3u';  // Local file in same directory
+        const EPG_URL = 'https://worker-9dd4.onrender.com/guide.xml.gz';  // From M3U header
+
+        // Route stream URLs through the local CORS proxy (server.py).
+        // Most IPTV streams don't send CORS headers, so the browser refuses
+        // them. The proxy fetches them server-side and adds the headers.
+        function proxyUrl(url) {
+            return '/proxy?url=' + encodeURIComponent(url);
+        }
+        
+        // Country code to name mapping
+        const COUNTRY_NAMES = {
+            'AD': 'Andorra', 'AE': 'United Arab Emirates', 'AF': 'Afghanistan', 'AG': 'Antigua and Barbuda',
+            'AL': 'Albania', 'AM': 'Armenia', 'AO': 'Angola', 'AR': 'Argentina', 'AT': 'Austria',
+            'AU': 'Australia', 'AW': 'Aruba', 'AZ': 'Azerbaijan', 'BA': 'Bosnia and Herzegovina',
+            'BB': 'Barbados', 'BD': 'Bangladesh', 'BE': 'Belgium', 'BF': 'Burkina Faso', 'BG': 'Bulgaria',
+            'BH': 'Bahrain', 'BI': 'Burundi', 'BJ': 'Benin', 'BO': 'Bolivia', 'BR': 'Brazil',
+            'BS': 'Bahamas', 'BT': 'Bhutan', 'BW': 'Botswana', 'BY': 'Belarus', 'BZ': 'Belize',
+            'CA': 'Canada', 'CD': 'DR Congo', 'CF': 'Central African Republic', 'CG': 'Congo',
+            'CH': 'Switzerland', 'CI': 'Côte d\'Ivoire', 'CL': 'Chile', 'CM': 'Cameroon', 'CN': 'China',
+            'CO': 'Colombia', 'CR': 'Costa Rica', 'CU': 'Cuba', 'CV': 'Cape Verde', 'CW': 'Curaçao',
+            'CY': 'Cyprus', 'CZ': 'Czech Republic', 'DE': 'Germany', 'DJ': 'Djibouti', 'DK': 'Denmark',
+            'DM': 'Dominica', 'DO': 'Dominican Republic', 'DZ': 'Algeria', 'EC': 'Ecuador', 'EE': 'Estonia',
+            'EG': 'Egypt', 'ER': 'Eritrea', 'ES': 'Spain', 'ET': 'Ethiopia', 'FI': 'Finland',
+            'FJ': 'Fiji', 'FM': 'Micronesia', 'FO': 'Faroe Islands', 'FR': 'France', 'GA': 'Gabon',
+            'GB': 'United Kingdom', 'GE': 'Georgia', 'GH': 'Ghana', 'GM': 'Gambia', 'GN': 'Guinea',
+            'GQ': 'Equatorial Guinea', 'GR': 'Greece', 'GT': 'Guatemala', 'GW': 'Guinea-Bissau',
+            'GY': 'Guyana', 'HK': 'Hong Kong', 'HN': 'Honduras', 'HR': 'Croatia', 'HT': 'Haiti',
+            'HU': 'Hungary', 'ID': 'Indonesia', 'IE': 'Ireland', 'IL': 'Israel', 'IN': 'India',
+            'IQ': 'Iraq', 'IR': 'Iran', 'IS': 'Iceland', 'IT': 'Italy', 'JM': 'Jamaica',
+            'JO': 'Jordan', 'JP': 'Japan', 'KE': 'Kenya', 'KG': 'Kyrgyzstan', 'KH': 'Cambodia',
+            'KM': 'Comoros', 'KN': 'Saint Kitts and Nevis', 'KP': 'North Korea', 'KR': 'South Korea',
+            'KW': 'Kuwait', 'KY': 'Cayman Islands', 'KZ': 'Kazakhstan', 'LA': 'Laos', 'LB': 'Lebanon',
+            'LC': 'Saint Lucia', 'LI': 'Liechtenstein', 'LK': 'Sri Lanka', 'LR': 'Liberia', 'LS': 'Lesotho',
+            'LT': 'Lithuania', 'LU': 'Luxembourg', 'LV': 'Latvia', 'LY': 'Libya', 'MA': 'Morocco',
+            'MC': 'Monaco', 'MD': 'Moldova', 'ME': 'Montenegro', 'MG': 'Madagascar', 'MK': 'North Macedonia',
+            'ML': 'Mali', 'MM': 'Myanmar', 'MN': 'Mongolia', 'MO': 'Macau', 'MR': 'Mauritania',
+            'MT': 'Malta', 'MU': 'Mauritius', 'MV': 'Maldives', 'MW': 'Malawi', 'MX': 'Mexico',
+            'MY': 'Malaysia', 'MZ': 'Mozambique', 'NA': 'Namibia', 'NE': 'Niger', 'NG': 'Nigeria',
+            'NI': 'Nicaragua', 'NL': 'Netherlands', 'NO': 'Norway', 'NP': 'Nepal', 'NZ': 'New Zealand',
+            'OM': 'Oman', 'PA': 'Panama', 'PE': 'Peru', 'PF': 'French Polynesia', 'PG': 'Papua New Guinea',
+            'PH': 'Philippines', 'PK': 'Pakistan', 'PL': 'Poland', 'PS': 'Palestine', 'PT': 'Portugal',
+            'PY': 'Paraguay', 'QA': 'Qatar', 'RO': 'Romania', 'RS': 'Serbia', 'RU': 'Russia',
+            'RW': 'Rwanda', 'SA': 'Saudi Arabia', 'SB': 'Solomon Islands', 'SC': 'Seychelles',
+            'SD': 'Sudan', 'SE': 'Sweden', 'SG': 'Singapore', 'SI': 'Slovenia', 'SK': 'Slovakia',
+            'SL': 'Sierra Leone', 'SM': 'San Marino', 'SN': 'Senegal', 'SO': 'Somalia', 'SR': 'Suriname',
+            'ST': 'São Tomé and Príncipe', 'SV': 'El Salvador', 'SY': 'Syria', 'SZ': 'Eswatini',
+            'TD': 'Chad', 'TG': 'Togo', 'TH': 'Thailand', 'TJ': 'Tajikistan', 'TL': 'Timor-Leste',
+            'TM': 'Turkmenistan', 'TN': 'Tunisia', 'TO': 'Tonga', 'TR': 'Turkey', 'TT': 'Trinidad and Tobago',
+            'TW': 'Taiwan', 'TZ': 'Tanzania', 'UA': 'Ukraine', 'UG': 'Uganda', 'UK': 'United Kingdom',
+            'US': 'United States', 'UY': 'Uruguay', 'UZ': 'Uzbekistan', 'VA': 'Vatican City',
+            'VC': 'Saint Vincent and the Grenadines', 'VE': 'Venezuela', 'VN': 'Vietnam',
+            'VU': 'Vanuatu', 'WS': 'Samoa', 'XK': 'Kosovo', 'YE': 'Yemen', 'ZA': 'South Africa',
+            'ZM': 'Zambia', 'ZW': 'Zimbabwe'
+        };
+        
+        // State
+        let channels = [];
+        let filteredChannels = [];
+        let countries = new Set();
+        let types = new Set();
+        let currentChannel = null;
+        let currentFilter = { country: null, type: null };
+        let sortBy = 'name';
+        let epgData = {};  // Store EPG data by channel ID
+        let hlsPlayer = null;  // HLS.js player instance
+        let currentChannelIndex = -1;
+        let streamLoadTimeout = null;
+        let loadToken = 0;            // Increments on every play attempt; stale async callbacks are ignored
+        let lastGoodChannelId = null; // Only set once a stream actually plays, so we never persist a dead channel
+        let autoSkipCount = 0;        // Guards against infinite skipping through dead channels
+        const MAX_AUTO_SKIP = 25;
+
+        // Cookie-based preferences (remembers last channel, country, genre, sort)
+        const PREF_COOKIE = 'iptv_prefs';
+        const PREF_COOKIE_DAYS = 365;
+
+        function setCookie(name, value, days) {
+            const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString();
+            document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
+        }
+
+        function getCookie(name) {
+            const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+            return match ? decodeURIComponent(match[1]) : null;
+        }
+
+        function savePreferences() {
+            const prefs = {
+                country: currentFilter.country,
+                type: currentFilter.type,
+                sortBy: sortBy,
+                channelId: lastGoodChannelId
+            };
+            setCookie(PREF_COOKIE, JSON.stringify(prefs), PREF_COOKIE_DAYS);
+        }
+
+        function loadPreferences() {
+            const raw = getCookie(PREF_COOKIE);
+            if (!raw) return null;
+            try {
+                return JSON.parse(raw);
+            } catch (e) {
+                return null;
+            }
+        }
+
+        // Cache management
+        const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+        const CACHE_KEYS = {
+            PLAYLIST: 'iptv_playlist_cache',
+            PLAYLIST_TIMESTAMP: 'iptv_playlist_timestamp',
+            EPG: 'iptv_epg_cache',
+            EPG_TIMESTAMP: 'iptv_epg_timestamp'
+        };
+
+        function isCacheValid(timestampKey) {
+            const timestamp = localStorage.getItem(timestampKey);
+            if (!timestamp) return false;
+            const age = Date.now() - parseInt(timestamp);
+            return age < CACHE_EXPIRY;
+        }
+
+        function getCachedData(key) {
+            try {
+                const data = localStorage.getItem(key);
+                return data ? JSON.parse(data) : null;
+            } catch (e) {
+                console.error('Cache read error:', e);
+                return null;
+            }
+        }
+
+        function setCachedData(key, data, timestampKey) {
+            try {
+                localStorage.setItem(key, JSON.stringify(data));
+                localStorage.setItem(timestampKey, Date.now().toString());
+                console.log(`Cached ${key} at ${new Date().toLocaleString()}`);
+            } catch (e) {
+                console.error('Cache write error:', e);
+                // If quota exceeded, clear old cache
+                if (e.name === 'QuotaExceededError') {
+                    localStorage.clear();
+                    console.log('Cache cleared due to quota');
+                }
+            }
+        }
+
+        function clearCache() {
+            Object.values(CACHE_KEYS).forEach(key => localStorage.removeItem(key));
+            console.log('All cache cleared');
+        }
+
+        // DOM Elements
+        const videoPlayer = document.getElementById('videoPlayer');
+        const searchBox = document.getElementById('searchBox');
+        const sortControl = document.getElementById('sortControl');
+        const channelsList = document.getElementById('channelsList');
+        const channelCount = document.getElementById('channelCount');
+        const currentChannelSpan = document.getElementById('currentChannel');
+        const channelInfoBox = document.getElementById('channelInfo');
+        const epgInfoBox = document.getElementById('epgInfo');
+        const playBtn = document.getElementById('playBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const retryBtn = document.getElementById('retryBtn');
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const prevChannelBtn = document.getElementById('prevChannelBtn');
+        const nextChannelBtn = document.getElementById('nextChannelBtn');
+
+        // Parse M3U playlist
+        async function loadPlaylist() {
+            channelsList.innerHTML = '<div class="loading">Loading channels...</div>';
+            
+            try {
+                // Check cache first
+                if (isCacheValid(CACHE_KEYS.PLAYLIST_TIMESTAMP)) {
+                    const cachedChannels = getCachedData(CACHE_KEYS.PLAYLIST);
+                    if (cachedChannels && cachedChannels.length > 0) {
+                        console.log(`Loaded ${cachedChannels.length} channels from cache`);
+                        channels = cachedChannels;
+                        finishLoadingChannels();
+                        
+                        // Show cache info
+                        const cacheTime = new Date(parseInt(localStorage.getItem(CACHE_KEYS.PLAYLIST_TIMESTAMP)));
+                        console.log(`Cache from: ${cacheTime.toLocaleString()}`);
+                        return;
+                    }
+                }
+                
+                // Cache miss or expired - fetch fresh data
+                console.log('Fetching fresh playlist...');
+                const response = await fetch(M3U_URL);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const text = await response.text();
+                console.log(`Downloaded ${text.length} characters`);
+                
+                channels = parseM3U(text);
+                console.log(`Parsed ${channels.length} channels`);
+                
+                // Cache the parsed channels
+                setCachedData(CACHE_KEYS.PLAYLIST, channels, CACHE_KEYS.PLAYLIST_TIMESTAMP);
+                
+                finishLoadingChannels();
+            } catch (error) {
+                console.error('Error loading playlist:', error);
+                showError(`Failed to load playlist: ${error.message}`);
+                channelsList.innerHTML = `<div class="error">Failed to load channels. Error: ${error.message}</div>`;
+            }
+        }
+
+        function finishLoadingChannels() {
+            // Extract unique countries and types
+            channels.forEach(ch => {
+                if (ch.country && ch.country !== 'Unknown') countries.add(ch.country);
+                ch.types.forEach(t => {
+                    if (t && t !== 'Undefined') types.add(t);
+                });
+            });
+
+            console.log(`Found ${countries.size} countries and ${types.size} types`);
+            populateFilters();
+
+            // Restore saved preferences (last country, genre, sort, channel)
+            const prefs = loadPreferences();
+            if (prefs) {
+                if (prefs.sortBy) {
+                    sortBy = prefs.sortBy;
+                    if (sortControl) sortControl.value = prefs.sortBy;
+                }
+                // Only restore filters that still exist in this playlist
+                if (prefs.country && countries.has(prefs.country)) {
+                    currentFilter.country = prefs.country;
+                }
+                if (prefs.type && types.has(prefs.type)) {
+                    currentFilter.type = prefs.type;
+                }
+                // Preserve the saved channel so filter/sort changes don't wipe it
+                lastGoodChannelId = prefs.channelId || null;
+                updateFilterButtons();
+            }
+
+            applyFilters();
+
+            // Resume the last played channel, if it's still available
+            if (prefs && prefs.channelId) {
+                const idx = filteredChannels.findIndex(ch => ch.id === prefs.channelId);
+                if (idx !== -1) {
+                    playChannel(filteredChannels[idx], idx);
+                    const activeItem = channelsList.querySelector('.channel-item.active');
+                    if (activeItem) activeItem.scrollIntoView({ block: 'center' });
+                }
+            }
+
+            // Load EPG in background
+            loadEPGData();
+        }
+
+        function parseM3U(content) {
+            const lines = content.split('\n');
+            const parsedChannels = [];
+            let currentMetadata = {};
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                
+                if (line.startsWith('#EXTINF:')) {
+                    // Parse metadata line
+                    const commaIndex = line.lastIndexOf(',');
+                    const metadata = line.substring(8, commaIndex);
+                    const name = line.substring(commaIndex + 1).trim();
+                    
+                    const tvgId = extractAttribute(line, 'tvg-id');
+                    const groupTitle = extractAttribute(line, 'group-title');
+                    
+                    // Extract country from tvg-id (e.g., "2GB.au@SD" -> "Australia")
+                    let countryCode = null;
+                    if (tvgId) {
+                        const match = tvgId.match(/\.([a-z]{2})[.@]/i);
+                        if (match) {
+                            countryCode = match[1].toUpperCase();
+                        }
+                    }
+                    const country = countryCode && COUNTRY_NAMES[countryCode] ? COUNTRY_NAMES[countryCode] : 'Unknown';
+                    
+                    // Split group-title by semicolon for multiple categories
+                    const typesArray = groupTitle 
+                        ? groupTitle.split(';').map(t => t.trim()).filter(t => t)
+                        : ['Undefined'];
+                    
+                    currentMetadata = {
+                        name: name || 'Unknown',
+                        country: country,
+                        types: typesArray,
+                        primaryType: typesArray[0] || 'Undefined',
+                        logo: extractAttribute(line, 'tvg-logo') || '',
+                        tvgId: tvgId || '',
+                        groupTitle: groupTitle || ''
+                    };
+                } else if (line && !line.startsWith('#') && line.includes('://')) {
+                    // This is the URL line
+                    if (currentMetadata.name) {
+                        parsedChannels.push({
+                            ...currentMetadata,
+                            url: line,
+                            id: currentMetadata.tvgId || `ch_${parsedChannels.length}`
+                        });
+                    }
+                    currentMetadata = {};
+                }
+            }
+
+            return parsedChannels;
+        }
+
+        function extractAttribute(line, attr) {
+            const regex = new RegExp(`${attr}="([^"]*)"`);
+            const match = line.match(regex);
+            return match ? match[1] : '';
+        }
+
+        function populateFilters() {
+            // Add "All" options
+            const countryContainer = document.getElementById('countryFilters');
+            const typeContainer = document.getElementById('typeFilters');
+            
+            countryContainer.innerHTML = '';
+            typeContainer.innerHTML = '';
+
+            // Add "All Countries" button
+            const allCountriesBtn = document.createElement('button');
+            allCountriesBtn.className = 'filter-btn active';
+            allCountriesBtn.textContent = 'All Countries';
+            allCountriesBtn.onclick = () => setCountryFilter(null);
+            countryContainer.appendChild(allCountriesBtn);
+
+            // Add individual country buttons
+            Array.from(countries).sort().forEach(country => {
+                const btn = document.createElement('button');
+                btn.className = 'filter-btn';
+                btn.textContent = country;
+                btn.onclick = () => setCountryFilter(country);
+                countryContainer.appendChild(btn);
+            });
+
+            // Add "All Types" button
+            const allTypesBtn = document.createElement('button');
+            allTypesBtn.className = 'filter-btn active';
+            allTypesBtn.textContent = 'All Types';
+            allTypesBtn.onclick = () => setTypeFilter(null);
+            typeContainer.appendChild(allTypesBtn);
+
+            // Add individual type buttons
+            Array.from(types).sort().forEach(type => {
+                const btn = document.createElement('button');
+                btn.className = 'filter-btn';
+                btn.textContent = type;
+                btn.onclick = () => setTypeFilter(type);
+                typeContainer.appendChild(btn);
+            });
+        }
+
+        function setCountryFilter(country) {
+            currentFilter.country = country;
+            updateFilterButtons();
+            applyFilters();
+            savePreferences();
+        }
+
+        function setTypeFilter(type) {
+            currentFilter.type = type;
+            updateFilterButtons();
+            applyFilters();
+            savePreferences();
+        }
+
+        function updateFilterButtons() {
+            // Update country buttons
+            document.querySelectorAll('#countryFilters .filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (!currentFilter.country && btn.textContent === 'All Countries') {
+                    btn.classList.add('active');
+                } else if (btn.textContent === currentFilter.country) {
+                    btn.classList.add('active');
+                }
+            });
+
+            // Update type buttons
+            document.querySelectorAll('#typeFilters .filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (!currentFilter.type && btn.textContent === 'All Types') {
+                    btn.classList.add('active');
+                } else if (btn.textContent === currentFilter.type) {
+                    btn.classList.add('active');
+                }
+            });
+        }
+
+        function applyFilters() {
+            let filtered = channels;
+
+            // Apply country filter
+            if (currentFilter.country) {
+                filtered = filtered.filter(ch => ch.country === currentFilter.country);
+            }
+
+            // Apply type filter
+            if (currentFilter.type) {
+                filtered = filtered.filter(ch => ch.types.includes(currentFilter.type));
+            }
+
+            // Apply search filter
+            const searchTerm = searchBox.value.toLowerCase();
+            if (searchTerm) {
+                filtered = filtered.filter(ch => 
+                    ch.name.toLowerCase().includes(searchTerm) ||
+                    ch.country.toLowerCase().includes(searchTerm) ||
+                    ch.types.some(t => t.toLowerCase().includes(searchTerm))
+                );
+            }
+
+            // Apply sorting
+            filtered.sort((a, b) => {
+                if (sortBy === 'name') return a.name.localeCompare(b.name);
+                if (sortBy === 'country') return a.country.localeCompare(b.country);
+                if (sortBy === 'type') return a.primaryType.localeCompare(b.primaryType);
+                return 0;
+            });
+
+            filteredChannels = filtered;
+            renderChannels();
+        }
+
+        function renderChannels() {
+            channelsList.innerHTML = '';
+            filteredChannels.forEach((channel, index) => {
+                const item = document.createElement('div');
+                item.className = 'channel-item';
+                if (currentChannel?.id === channel.id) item.classList.add('active');
+                
+                if (channel.logo) {
+                    const img = document.createElement('img');
+                    img.className = 'channel-item-logo';
+                    img.src = channel.logo;
+                    img.onerror = () => img.style.display = 'none';
+                    item.appendChild(img);
+                }
+                
+                const info = document.createElement('div');
+                info.className = 'channel-item-info';
+                
+                const name = document.createElement('div');
+                name.className = 'channel-item-name';
+                name.textContent = channel.name;
+                info.appendChild(name);
+                
+                const meta = document.createElement('div');
+                meta.className = 'channel-item-meta';
+                meta.textContent = `${channel.country} • ${channel.primaryType}`;
+                info.appendChild(meta);
+                
+                item.appendChild(info);
+                item.onclick = () => {
+                    autoSkipCount = 0; // manual selection resets the auto-skip guard
+                    playChannel(channel, index);
+                };
+                channelsList.appendChild(item);
+            });
+
+            channelCount.textContent = `${filteredChannels.length} channels`;
+        }
+
+        function playChannel(channel, channelIndex) {
+            // Each attempt gets a unique token. Async callbacks from a previous
+            // attempt check this token and bail out if a newer attempt started,
+            // so a failing stream can never lock out future clicks.
+            const myToken = ++loadToken;
+
+            currentChannel = channel;
+            currentChannelIndex = channelIndex !== undefined ? channelIndex : filteredChannels.findIndex(ch => ch.id === channel.id);
+
+            // Clear any existing timeout
+            if (streamLoadTimeout) {
+                clearTimeout(streamLoadTimeout);
+                streamLoadTimeout = null;
+            }
+
+            // Show loading indicator
+            showVideoOverlay('<div class="loading-spinner"></div><div>Loading ' + channel.name + '...</div>');
+
+            // Stop existing player
+            if (hlsPlayer) {
+                hlsPlayer.destroy();
+                hlsPlayer = null;
+            }
+
+            currentChannelSpan.textContent = `▶ ${channel.name}`;
+
+            // Called when this stream successfully starts playing
+            const onStreamSuccess = () => {
+                if (myToken !== loadToken) return; // a newer attempt superseded this one
+                clearTimeout(streamLoadTimeout);
+                hideVideoOverlay();
+                autoSkipCount = 0;
+                lastGoodChannelId = channel.id;
+                savePreferences();
+                console.log('✓ Stream playing:', channel.name);
+            };
+
+            // Called when this stream fails — advance to the next channel
+            const onStreamFail = (reason) => {
+                if (myToken !== loadToken) return; // user already moved on; do nothing
+                clearTimeout(streamLoadTimeout);
+                console.log('Stream failed:', reason, '-', channel.name);
+                if (autoSkipCount >= MAX_AUTO_SKIP) {
+                    autoSkipCount = 0;
+                    showError('Could not find a working stream nearby. Pick a channel manually.');
+                    return;
+                }
+                autoSkipCount++;
+                showError('Stream unavailable. Trying next channel...');
+                setTimeout(() => {
+                    if (myToken === loadToken) playNextChannel();
+                }, 1200);
+            };
+
+            // Set timeout to auto-skip if stream takes too long
+            streamLoadTimeout = setTimeout(() => onStreamFail('timeout'), 15000);
+
+            // Route the stream through the local CORS proxy so the browser
+            // will accept it (most IPTV servers don't send CORS headers).
+            const streamUrl = proxyUrl(channel.url);
+
+            // Check if it's an HLS stream (.m3u8)
+            if (channel.url.includes('.m3u8')) {
+                if (Hls.isSupported()) {
+                    // Use HLS.js for browsers that support MSE
+                    hlsPlayer = new Hls({
+                        enableWorker: true,
+                        lowLatencyMode: true,
+                        backBufferLength: 90,
+                        maxLoadingDelay: 4,
+                        manifestLoadingTimeOut: 10000,
+                        manifestLoadingMaxRetry: 2,
+                        levelLoadingTimeOut: 10000
+                    });
+
+                    hlsPlayer.loadSource(streamUrl);
+                    hlsPlayer.attachMedia(videoPlayer);
+
+                    hlsPlayer.on(Hls.Events.MANIFEST_PARSED, function() {
+                        if (myToken !== loadToken) return;
+                        videoPlayer.play().then(onStreamSuccess).catch(err => {
+                            console.log('Play error (autoplay blocked?):', err);
+                            // Autoplay can be blocked but stream is fine; treat as success
+                            onStreamSuccess();
+                        });
+                    });
+
+                    hlsPlayer.on(Hls.Events.ERROR, function(event, data) {
+                        if (data.fatal) {
+                            console.error('HLS fatal error:', data.type, data.details);
+                            onStreamFail(data.details);
+                        }
+                    });
+                } else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
+                    // Native HLS support (Safari)
+                    videoPlayer.src = streamUrl;
+                    videoPlayer.onloadeddata = onStreamSuccess;
+                    videoPlayer.onerror = () => onStreamFail('native HLS error');
+                    videoPlayer.play().catch(err => console.log('Native HLS play error:', err));
+                } else {
+                    if (myToken === loadToken) {
+                        clearTimeout(streamLoadTimeout);
+                        hideVideoOverlay();
+                        showError('Your browser does not support HLS streaming');
+                    }
+                }
+            } else {
+                // Regular video URL
+                videoPlayer.src = streamUrl;
+                videoPlayer.onloadeddata = onStreamSuccess;
+                videoPlayer.onerror = () => onStreamFail('video error');
+                videoPlayer.play().catch(err => console.log('Play error:', err));
+            }
+
+            channelInfoBox.innerHTML = `
+                <strong>Name:</strong> ${channel.name}<br>
+                <strong>Country:</strong> ${channel.country}<br>
+                <strong>Type:</strong> ${channel.types.join(', ')}<br>
+                <strong>Channel:</strong> ${currentChannelIndex + 1} of ${filteredChannels.length}<br>
+                <strong>ID:</strong> ${channel.tvgId || 'N/A'}
+            `;
+
+            renderChannels();
+            updateEPG(channel);
+        }
+
+        function showVideoOverlay(html) {
+            const overlay = document.getElementById('videoOverlay');
+            overlay.innerHTML = html;
+            overlay.style.display = 'block';
+        }
+
+        function hideVideoOverlay() {
+            const overlay = document.getElementById('videoOverlay');
+            overlay.style.display = 'none';
+        }
+
+        function showError(message) {
+            showVideoOverlay(`<div style="color: #ff4444; font-size: 1rem;">⚠️ ${message}</div>`);
+            setTimeout(() => hideVideoOverlay(), 3000);
+        }
+
+        function playNextChannel() {
+            if (filteredChannels.length === 0) return;
+            const nextIndex = (currentChannelIndex + 1) % filteredChannels.length;
+            playChannel(filteredChannels[nextIndex], nextIndex);
+        }
+
+        function playPreviousChannel() {
+            if (filteredChannels.length === 0) return;
+            autoSkipCount = 0; // manual navigation resets the auto-skip guard
+            const prevIndex = currentChannelIndex <= 0 ? filteredChannels.length - 1 : currentChannelIndex - 1;
+            playChannel(filteredChannels[prevIndex], prevIndex);
+        }
+
+        function retryCurrentChannel() {
+            if (currentChannel) {
+                autoSkipCount = 0;
+                playChannel(currentChannel, currentChannelIndex);
+            }
+        }
+
+        function updateEPG(channel) {
+            epgInfoBox.innerHTML = '<em>Loading EPG data...</em>';
+            
+            if (channel.tvgId) {
+                // Check if we have EPG data for this channel
+                const epgPrograms = epgData[channel.tvgId];
+                
+                if (epgPrograms && epgPrograms.length > 0) {
+                    // Show real EPG data
+                    let html = '';
+                    const now = new Date();
+                    
+                    // Find current and upcoming programs
+                    const currentProgram = epgPrograms.find(p => 
+                        new Date(p.start) <= now && new Date(p.stop) > now
+                    );
+                    
+                    if (currentProgram) {
+                        html += `
+                            <div class="epg-item">
+                                <div class="epg-time">${formatTime(currentProgram.start)} - ${formatTime(currentProgram.stop)}</div>
+                                <div class="epg-program"><strong>NOW:</strong> ${currentProgram.title}</div>
+                                ${currentProgram.desc ? `<div style="font-size: 0.8rem; color: #aaa; margin-top: 0.3rem;">${currentProgram.desc}</div>` : ''}
+                            </div>
+                        `;
+                    }
+                    
+                    // Show next 2 upcoming programs
+                    const upcomingPrograms = epgPrograms
+                        .filter(p => new Date(p.start) > now)
+                        .slice(0, 2);
+                    
+                    upcomingPrograms.forEach(prog => {
+                        html += `
+                            <div class="epg-item">
+                                <div class="epg-time">${formatTime(prog.start)} - ${formatTime(prog.stop)}</div>
+                                <div class="epg-program">${prog.title}</div>
+                            </div>
+                        `;
+                    });
+                    
+                    if (html) {
+                        const cacheTime = localStorage.getItem(CACHE_KEYS.EPG_TIMESTAMP);
+                        const cacheDate = cacheTime ? new Date(parseInt(cacheTime)) : new Date();
+                        html += `<div style="margin-top: 1rem; font-size: 0.75rem; color: #00d4ff; opacity: 0.6;">
+                            EPG updated: ${cacheDate.toLocaleDateString()} ${cacheDate.toLocaleTimeString()}
+                        </div>`;
+                        epgInfoBox.innerHTML = html;
+                    } else {
+                        epgInfoBox.innerHTML = '<em>No current program information</em>';
+                    }
+                } else {
+                    // No EPG data for this channel
+                    epgInfoBox.innerHTML = `
+                        <div class="epg-item">
+                            <div class="epg-program">No EPG data available for this channel</div>
+                        </div>
+                        <div style="margin-top: 1rem; font-size: 0.8rem; color: #00d4ff;">
+                            <strong>Channel ID:</strong> ${channel.tvgId}<br>
+                            <em>EPG data will be loaded if available</em>
+                        </div>
+                    `;
+                }
+            } else {
+                epgInfoBox.innerHTML = '<em>No EPG ID available for this channel</em>';
+            }
+        }
+
+        function formatTime(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        async function loadEPGData() {
+            // Check cache first
+            if (isCacheValid(CACHE_KEYS.EPG_TIMESTAMP)) {
+                const cachedEPG = getCachedData(CACHE_KEYS.EPG);
+                if (cachedEPG) {
+                    epgData = cachedEPG;
+                    console.log(`Loaded EPG data from cache (${Object.keys(epgData).length} channels)`);
+                    return;
+                }
+            }
+            
+            // Cache expired or missing - try to fetch fresh EPG
+            console.log('EPG cache expired or missing. EPG fetching would happen here.');
+            console.log('Note: Full EPG is 100MB+ compressed. For production, fetch specific channel EPGs only.');
+            
+            // For now, just log that we would fetch it
+            // In production, you'd fetch from EPG_URL or specific channel EPG files
+            // and parse the XML to populate epgData
+            
+            // Example structure:
+            // epgData = {
+            //     'channelId': [
+            //         { start: '2024-01-01T10:00:00', stop: '2024-01-01T11:00:00', title: 'Program Name', desc: 'Description' }
+            //     ]
+            // };
+        }
+
+        function showError(message) {
+            console.error('Error:', message);
+            // Show error in EPG area instead of popup
+            epgInfoBox.innerHTML = `<div style="color: #ff6464; padding: 0.5rem; background: rgba(255, 100, 100, 0.1); border-radius: 4px;">
+                ⚠️ ${message}
+            </div>`;
+        }
+
+        // Event listeners
+        searchBox.addEventListener('input', applyFilters);
+        sortControl.addEventListener('change', (e) => {
+            sortBy = e.target.value;
+            applyFilters();
+            savePreferences();
+        });
+
+        playBtn.addEventListener('click', () => videoPlayer.play());
+        pauseBtn.addEventListener('click', () => videoPlayer.pause());
+        retryBtn.addEventListener('click', retryCurrentChannel);
+        prevChannelBtn.addEventListener('click', playPreviousChannel);
+        nextChannelBtn.addEventListener('click', playNextChannel);
+
+        // Keyboard controls for TV-like experience
+        document.addEventListener('keydown', (e) => {
+            // Don't interfere if user is typing in search box
+            if (document.activeElement === searchBox) return;
+            
+            switch(e.key) {
+                case 'ArrowUp':
+                case 'PageUp':
+                    e.preventDefault();
+                    playPreviousChannel();
+                    break;
+                case 'ArrowDown':
+                case 'PageDown':
+                    e.preventDefault();
+                    playNextChannel();
+                    break;
+                case ' ':
+                    e.preventDefault();
+                    if (videoPlayer.paused) {
+                        videoPlayer.play();
+                    } else {
+                        videoPlayer.pause();
+                    }
+                    break;
+                case 'f':
+                case 'F':
+                    e.preventDefault();
+                    fullscreenBtn.click();
+                    break;
+                case 'r':
+                case 'R':
+                    e.preventDefault();
+                    retryCurrentChannel();
+                    break;
+            }
+        });
+
+        fullscreenBtn.addEventListener('click', () => {
+            const wrapper = document.querySelector('.video-player-wrapper');
+            if (wrapper.requestFullscreen) {
+                wrapper.requestFullscreen();
+            } else if (wrapper.webkitRequestFullscreen) {
+                wrapper.webkitRequestFullscreen();
+            }
+        });
+
+        function handleClearCache() {
+            if (confirm('Clear all cached data? The page will reload with fresh data.')) {
+                clearCache();
+                location.reload();
+            }
+        }
+
+        function updateCacheStatus() {
+            const cacheStatusEl = document.getElementById('cacheStatus');
+            if (!cacheStatusEl) return;
+            
+            const playlistTime = localStorage.getItem(CACHE_KEYS.PLAYLIST_TIMESTAMP);
+            const epgTime = localStorage.getItem(CACHE_KEYS.EPG_TIMESTAMP);
+            
+            if (playlistTime) {
+                const age = Date.now() - parseInt(playlistTime);
+                const hoursOld = Math.floor(age / (1000 * 60 * 60));
+                const minutesOld = Math.floor((age % (1000 * 60 * 60)) / (1000 * 60));
+                
+                if (hoursOld > 0) {
+                    cacheStatusEl.textContent = `${hoursOld}h ${minutesOld}m old`;
+                } else {
+                    cacheStatusEl.textContent = `${minutesOld}m old`;
+                }
+                
+                if (age >= CACHE_EXPIRY) {
+                    cacheStatusEl.style.color = '#ff9999';
+                    cacheStatusEl.textContent += ' (refreshing...)';
+                } else {
+                    cacheStatusEl.style.color = '#00d4ff';
+                }
+            } else {
+                cacheStatusEl.textContent = 'No cache';
+                cacheStatusEl.style.color = '#999';
+            }
+        }
+
+        // Initialize
+        window.addEventListener('load', () => {
+            loadPlaylist();
+            updateCacheStatus();
+            // Update cache status every minute
+            setInterval(updateCacheStatus, 60000);
+        });
+    </script>
+</body>
+</html>
