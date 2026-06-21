@@ -780,15 +780,80 @@
                     const tvgId = extractAttribute(line, 'tvg-id');
                     const groupTitle = extractAttribute(line, 'group-title');
                     
-                    // Extract country from tvg-id (e.g., "2GB.au@SD" -> "Australia")
-                    let countryCode = null;
+                    // Extract country from tvg-id (e.g., "24Kitchen.us@Serbia" -> "Serbia" or "48Hours.us@CA" -> "Canada")
+                    let country = 'Unknown';
                     if (tvgId) {
-                        const match = tvgId.match(/\.([a-z]{2})[.@]/i);
-                        if (match) {
-                            countryCode = match[1].toUpperCase();
+                        // Try to extract from @XXX pattern first (e.g., @CA, @GB, @IT, @Serbia)
+                        const atMatch = tvgId.match(/@([A-Za-z]+)$/);
+                        if (atMatch) {
+                            const code = atMatch[1];
+                            const codeUpper = code.toUpperCase();
+                            
+                            // Map of @-codes to countries (handles both ISO codes and special values)
+                            const atCodeMap = {
+                                // ISO 2-letter country codes
+                                'US': 'United States', 'USA': 'United States', 'CA': 'Canada',
+                                'GB': 'United Kingdom', 'UK': 'United Kingdom', 'IT': 'Italy',
+                                'FR': 'France', 'DE': 'Germany', 'ES': 'Spain', 'PT': 'Portugal',
+                                'NL': 'Netherlands', 'BE': 'Belgium', 'CH': 'Switzerland', 'AT': 'Austria',
+                                'PL': 'Poland', 'RO': 'Romania', 'HU': 'Hungary', 'CZ': 'Czech Republic',
+                                'SE': 'Sweden', 'NO': 'Norway', 'DK': 'Denmark', 'FI': 'Finland',
+                                'IS': 'Iceland', 'GR': 'Greece', 'RS': 'Serbia', 'HR': 'Croatia',
+                                'BA': 'Bosnia and Herzegovina', 'ME': 'Montenegro', 'MK': 'North Macedonia',
+                                'BG': 'Bulgaria', 'SK': 'Slovakia', 'SI': 'Slovenia', 'LT': 'Lithuania',
+                                'LV': 'Latvia', 'EE': 'Estonia', 'UA': 'Ukraine', 'BY': 'Belarus',
+                                'RU': 'Russia', 'KZ': 'Kazakhstan', 'UZ': 'Uzbekistan', 'TJ': 'Tajikistan',
+                                'TM': 'Turkmenistan', 'KG': 'Kyrgyzstan', 'TR': 'Turkey', 'IR': 'Iran',
+                                'IQ': 'Iraq', 'SA': 'Saudi Arabia', 'AE': 'United Arab Emirates',
+                                'KW': 'Kuwait', 'QA': 'Qatar', 'OM': 'Oman', 'YE': 'Yemen',
+                                'IL': 'Israel', 'PS': 'Palestine', 'JO': 'Jordan', 'LB': 'Lebanon',
+                                'SY': 'Syria', 'EG': 'Egypt', 'DZ': 'Algeria', 'TN': 'Tunisia',
+                                'MA': 'Morocco', 'SD': 'Sudan', 'ET': 'Ethiopia', 'KE': 'Kenya',
+                                'TZ': 'Tanzania', 'UG': 'Uganda', 'ZA': 'South Africa', 'NG': 'Nigeria',
+                                'GH': 'Ghana', 'SN': 'Senegal', 'CI': 'Côte d\'Ivoire', 'CM': 'Cameroon',
+                                'CD': 'DR Congo', 'IN': 'India', 'PK': 'Pakistan', 'BD': 'Bangladesh',
+                                'LK': 'Sri Lanka', 'NP': 'Nepal', 'TH': 'Thailand', 'LA': 'Laos',
+                                'KH': 'Cambodia', 'VN': 'Vietnam', 'MM': 'Myanmar', 'SG': 'Singapore',
+                                'MY': 'Malaysia', 'ID': 'Indonesia', 'PH': 'Philippines', 'KR': 'South Korea',
+                                'JP': 'Japan', 'CN': 'China', 'TW': 'Taiwan', 'HK': 'Hong Kong',
+                                'MO': 'Macau', 'AU': 'Australia', 'NZ': 'New Zealand', 'FJ': 'Fiji',
+                                'MX': 'Mexico', 'BR': 'Brazil', 'AR': 'Argentina', 'CL': 'Chile',
+                                'CO': 'Colombia', 'PE': 'Peru', 'VE': 'Venezuela', 'EC': 'Ecuador',
+                                'BO': 'Bolivia', 'PY': 'Paraguay', 'UY': 'Uruguay', 'CR': 'Costa Rica',
+                                'PA': 'Panama', 'GT': 'Guatemala', 'SV': 'El Salvador', 'HN': 'Honduras',
+                                'NI': 'Nicaragua', 'CU': 'Cuba', 'DO': 'Dominican Republic', 'JM': 'Jamaica',
+                                'HT': 'Haiti',
+                                // Full country names
+                                'ITALY': 'Italy', 'SERBIA': 'Serbia', 'FRANCE': 'France', 'GERMANY': 'Germany',
+                                'SPAIN': 'Spain', 'PORTUGAL': 'Portugal', 'POLAND': 'Poland', 'ROMANIA': 'Romania',
+                                'HUNGARY': 'Hungary', 'CZECHREPUBLIC': 'Czech Republic', 'AUSTRALIA': 'Australia',
+                                'BRAZIL': 'Brazil', 'INDIA': 'India', 'PAKISTAN': 'Pakistan', 'NEPAL': 'Nepal',
+                                'INDONESIA': 'Indonesia', 'MOROCCO': 'Morocco',
+                                // Regional/language codes - these are NOT countries, so map to Unknown
+                                'AFRICA': 'Unknown', 'AMERICA': 'Unknown', 'EUROPE': 'Unknown',
+                                'ARABIA': 'Unknown', 'ARABIC': 'Unknown', 'ENGLISH': 'Unknown',
+                                'INTERNATIONAL': 'Unknown', 'PANREGIONAL': 'Unknown',
+                                'FAREAST': 'Unknown', 'INDOCHINA': 'Unknown', 'LATAM': 'Unknown',
+                                'EAST': 'Unknown', 'RUSSIAN': 'Unknown', 'CHINESE': 'Unknown',
+                                'SPANISH': 'Unknown', 'PORTUGUESE': 'Unknown', 'HEBREW': 'Unknown',
+                                // Australian states - these are regions within Australia
+                                'ACT': 'Unknown', 'NSW': 'Unknown', 'QLD': 'Unknown',
+                                'TAS': 'Unknown', 'VIC': 'Unknown', 'WA': 'Unknown',
+                                // Quality indicators - ignore
+                                'HD': 'Unknown', 'EASTHD': 'Unknown', 'INTERHD': 'Unknown',
+                                'HDTNT': 'Unknown', 'PLUS1': 'Unknown'
+                            };
+                            
+                            country = atCodeMap[codeUpper] || 'Unknown';
+                        } else {
+                            // Fallback to old extraction method for legacy tvg-id format
+                            const dotMatch = tvgId.match(/\.([a-z]{2})[.@]/i);
+                            if (dotMatch) {
+                                const countryCode = dotMatch[1].toUpperCase();
+                                country = COUNTRY_NAMES[countryCode] || 'Unknown';
+                            }
                         }
                     }
-                    const country = countryCode && COUNTRY_NAMES[countryCode] ? COUNTRY_NAMES[countryCode] : 'Unknown';
                     
                     // Split group-title by semicolon for multiple categories
                     const typesArray = groupTitle 
